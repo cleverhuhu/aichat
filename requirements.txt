@@ -1,0 +1,16 @@
+Flask
+flask-cors
+Werkzeug
+itsdangerous
+click
+Jinja2
+MarkupSafe
+Gunicorn
+google-generativeai
+pyaudio
+SpeechRecognition
+gradio_client
+numpy
+scipy
+requests
+urllib3

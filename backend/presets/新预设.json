@@ -1,0 +1,34 @@
+{
+  "name": "新预设",
+  "tags": [
+    "自定义"
+  ],
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "top_k": 40,
+  "presence_penalty": 0,
+  "frequency_penalty": 0,
+  "instructions": [
+    {
+      "title": "基本指令",
+      "content": "请按照以下方式回答...",
+      "role": "system",
+      "injection_position": 0,
+      "injection_depth": 4,
+      "system_prompt": true,
+      "marker": false,
+      "enabled": true,
+      "expanded": true
+    }
+  ],
+  "prompt_order": [
+    {
+      "identifier": "main",
+      "enabled": true
+    },
+    {
+      "identifier": "charDescription",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "aiAvatar": null,
+  "userAvatar": null,
+  "chatBackground": null,
+  "selectedCharacter": null,
+  "currentAIProvider": "gemini",
+  "theme": "dark",
+  "characterAvatars": {},
+  "characterDescriptions": {},
+  "selectedPreset": null,
+  "tts": {
+    "speed": 1,
+    "autoPlay": true,
+    "refAudio": null
+  },
+  "gemini": {
+    "apiKey": "AIzaSyAHYZIAixqoFfNyJnvsNxDg1BXKfjQCQPA",
+    "model": "gemini-2.0-pro-exp-02-05",
+    "temperature": 0.7
+  },
+  "openai": {
+    "apiKey": "",
+    "model": "gpt-4o",
+    "temperature": 0.7
+  },
+  "claude": {
+    "apiKey": "",
+    "model": "claude-3-5-sonnet-20240229",
+    "temperature": 0.7
+  },
+  "ttsUrl": " http://0.0.0.0:9872"
+}
