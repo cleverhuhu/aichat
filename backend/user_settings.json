@@ -3,7 +3,7 @@
   "userAvatar": null,
   "chatBackground": null,
   "selectedCharacter": "妹妹.txt",
-  "currentAIProvider": "gemini",
+  "currentAIProvider": "claude",
   "theme": "dark",
   "characterAvatars": {},
   "characterDescriptions": {},
@@ -15,7 +15,7 @@
   },
   "gemini": {
     "apiKey": "AIzaSyAHYZIAixqoFfNyJnvsNxDg1BXKfjQCQPA",
-    "model": "gemini-2.0-pro-exp-02-05",
+    "model": "gemini-2.0-flash-lite-preview-02-05",
     "temperature": 0.7
   },
   "openai": {
@@ -24,8 +24,8 @@
     "temperature": 0.7
   },
   "claude": {
-    "apiKey": "",
-    "model": "claude-3-5-sonnet-20240229",
+    "apiKey": "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",
+    "model": "claude-3-7-sonnet-20250219",
     "temperature": 0.7
   },
   "ttsUrl": " http://0.0.0.0:9872"
