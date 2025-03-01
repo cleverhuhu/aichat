@@ -174,6 +174,29 @@
             {{ interimTranscript }}
           </div>
         </div>
+        <!-- 图片预览 -->
+        <div v-if="uploadedImage" class="image-preview">
+          <img :src="uploadedImage" alt="上传图片" class="preview-image">
+          <button @click="removeUploadedImage" class="remove-image-btn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      <div class="input-actions">
+        <!-- 图片上传按钮 -->
+        <button
+          @click="triggerImageUpload"
+          class="action-button upload-image-button"
+          :disabled="isWaitingForResponse || !settings.selectedCharacter"
+          title="上传图片">
+          <i class="fas fa-image"></i>
+      </button>
+      <input
+          type="file"
+          ref="imageUpload"
+          @change="handleImageUpload"
+          accept="image/*"
+          style="display: none">
 
         <button
           @click="sendMessage"
@@ -230,6 +253,7 @@ export default {
   data() {
     return {
       messages: [],
+      uploadedImage: null,
       newMessage: '',
       recognition: null,
       isListening: false,
@@ -333,6 +357,36 @@ export default {
       link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
       document.head.appendChild(link);
     },
+    // 触发图片上传
+    triggerImageUpload() {
+      this.$refs.imageUpload.click();
+    },
+    // 处理图片上传
+    handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      // 检查文件类型是否为图片
+      if (!file.type.match('image.*')) {
+        this.showToast('请上传图片文件', 'error');
+        return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      this.showToast('图片大小不能超过5MB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.uploadedImage = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  },
+    removeUploadedImage() {
+    this.uploadedImage = null;
+    this.$refs.imageUpload.value = '';
+  },
+
+
 
     setupMessageInputAutoResize() {
       if (this.$refs.messageInput) {
@@ -668,7 +722,7 @@ export default {
     },
 
     async sendMessage() {
-      if (!this.newMessage.trim() || this.isWaitingForResponse) return;
+      if ((!this.newMessage.trim() && !this.uploadedImage) || this.isWaitingForResponse) return;
 
       if (!this.settings.selectedCharacter) {
         this.showToast('请先选择一个角色', 'info');
@@ -677,7 +731,12 @@ export default {
       }
 
       const messageText = this.newMessage.trim();
-      this.messages.push({text: messageText, type: 'user', timestamp: new Date()});
+      this.messages.push({
+      text: messageText,
+      type: 'user',
+      timestamp: new Date(),
+      image: this.uploadedImage // 添加图片
+      });
       this.newMessage = '';
       this.interimTranscript = '';
       this.isWaitingForResponse = true;
@@ -701,8 +760,11 @@ export default {
         ai_settings: this.settings[this.settings.currentAIProvider],
         tts_enabled: this.ttsAvailable,
         tts_settings: this.settings.tts,
-        preset: this.settings.selectedPreset
+        preset: this.settings.selectedPreset,
+        image_data: this.uploadedImage
       };
+      // 清除已上传的图片（发送后）
+      this.uploadedImage = null;
 
       try {
         const response = await fetch('http://127.0.0.1:5000/chat', {
@@ -884,6 +946,58 @@ export default {
 body {
   font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   overflow: hidden;
+}
+
+/* 图片预览样式 */
+.image-preview {
+  position: relative;
+  margin-top: 8px;
+  max-width: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #40444b;
+}
+
+.preview-image {
+  width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+  display: block;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background-color: rgba(0, 0, 0, 0.6);
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.remove-image-btn:hover {
+  background-color: rgba(240, 71, 71, 0.8);
+}
+
+.input-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.upload-image-button {
+  color: #72767d;
+}
+
+.upload-image-button:hover:not(:disabled) {
+  background-color: #4f545c;
+  color: white;
 }
 
 /* Discord风格应用 */
@@ -1403,7 +1517,7 @@ body {
   top: 0;
   left: 0;
   height: 100%;
-  width: var(--value, 0%);
+  width: var( value, 0%);
   background: linear-gradient(to right, #3ba55c, #5865f2);
   border-radius: 3px;
 }
@@ -1723,4 +1837,5 @@ body {
     display: none;
   }
 }
+
 </style>

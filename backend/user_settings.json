@@ -2,7 +2,7 @@
   "aiAvatar": null,
   "userAvatar": null,
   "chatBackground": null,
-  "selectedCharacter": null,
+  "selectedCharacter": "妹妹.txt",
   "currentAIProvider": "gemini",
   "theme": "dark",
   "characterAvatars": {},

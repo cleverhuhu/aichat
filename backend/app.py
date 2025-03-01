@@ -43,6 +43,7 @@ def get_settings():
 
 
 # 路由：保存设置
+# 路由：保存设置
 @app.route('/save_settings', methods=['POST'])
 def save_settings():
     try:
@@ -51,6 +52,22 @@ def save_settings():
         # 确保settings是一个字典
         if not isinstance(settings, dict):
             return jsonify({"success": False, "error": "Settings must be a JSON object"})
+
+        # 确保重要的API密钥被保存
+        if os.path.exists(SETTINGS_FILE):
+            # 如果设置文件已存在，先读取旧设置
+            try:
+                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                    old_settings = json.load(f)
+
+                # 如果新设置中某个AI提供商的API密钥为空，但旧设置有，保留旧设置的API密钥
+                for provider in ['gemini', 'openai', 'claude']:
+                    if provider in settings and provider in old_settings:
+                        if 'apiKey' in settings[provider] and not settings[provider]['apiKey'] and 'apiKey' in \
+                                old_settings[provider]:
+                            settings[provider]['apiKey'] = old_settings[provider]['apiKey']
+            except:
+                pass
 
         with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
             json.dump(settings, f, ensure_ascii=False, indent=2)
@@ -290,6 +307,7 @@ def delete_history(history_id):
 
 
 # 聊天AI路由
+# 聊天AI路由
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
@@ -304,6 +322,7 @@ def chat():
         tts_enabled = data.get('tts_enabled', False)
         tts_settings = data.get('tts_settings', {})
         preset_name = data.get('preset', None)
+        image_data = data.get('image_data', None)  # 新增：图片数据
 
         # 加载角色文件内容
         character_content = ""
@@ -331,7 +350,8 @@ def chat():
             preset,
             character_content,
             first_message,
-            character_name
+            character_name,
+            image_data  # 添加图片数据参数
         )
 
         # 处理TTS（如果启用）
@@ -358,7 +378,7 @@ def chat():
                 "character": character_file,
                 "created_at": datetime.now().isoformat(),
                 "messages": [
-                    {"text": user_message, "type": "user", "timestamp": datetime.now().isoformat()},
+                    {"text": user_message, "type": "user", "timestamp": datetime.now().isoformat(), "has_image": image_data is not None},
                     {"text": ai_response, "type": "ai", "timestamp": datetime.now().isoformat(),
                      "tts_played": tts_result.get("tts_played", False)}
                 ],
@@ -384,7 +404,8 @@ def chat():
             history_data["messages"].append({
                 "text": user_message,
                 "type": "user",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "has_image": image_data is not None
             })
             history_data["messages"].append({
                 "text": ai_response,

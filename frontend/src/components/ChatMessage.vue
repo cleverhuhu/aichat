@@ -11,6 +11,11 @@
         <span class="message-time">{{ getFormattedTime() }}</span>
       </div>
 
+      <!-- 图片（如果有） -->
+      <div v-if="message.image" class="message-image">
+        <img :src="message.image" alt="用户上传的图片" @click="openImagePreview(message.image)">
+      </div>
+
       <!-- 消息文本 -->
       <div v-if="!message.loading" class="message-text">
         <div v-html="processedText"></div>
@@ -23,6 +28,16 @@
           <span></span>
           <span></span>
         </div>
+      </div>
+    </div>
+
+    <!-- 图片预览模态框 -->
+    <div v-if="previewImage" class="image-preview-modal" @click="previewImage = null">
+      <div class="image-preview-content">
+        <img :src="previewImage" alt="图片预览">
+        <button class="close-preview" @click.stop="previewImage = null">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
   </div>
@@ -47,7 +62,8 @@ export default {
 
   data() {
     return {
-      timestamp: new Date()
+      timestamp: new Date(),
+      previewImage: null
     };
   },
 
@@ -84,6 +100,12 @@ export default {
   },
 
   methods: {
+
+    openImagePreview(image) {
+      this.previewImage = image;
+    },
+
+
     getCurrentCharacterName() {
       // 尝试获取当前角色名称，如果无法获取，则使用默认值
       const selectedCharacter = this.$parent.settings?.selectedCharacter;
@@ -98,17 +120,76 @@ export default {
       const hours = now.getHours().toString().padStart(2, '0');
       const minutes = now.getMinutes().toString().padStart(2, '0');
       return `${hours}:${minutes}`;
+
+
     }
   }
 };
 </script>
 
 <style scoped>
+
+/* 消息中的图片 */
+.message-image {
+  margin-bottom: 8px;
+  max-width: 250px;
+}
+
+.message-image img {
+  max-width: 100%;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid #40444b;
+}
+
+/* 图片预览模态框 */
+.image-preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+.image-preview-content {
+  position: relative;
+  max-width: 90%;
+  max-height: 90%;
+}
+
+.image-preview-content img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.close-preview {
+  position: absolute;
+  top: -30px;
+  right: 0;
+  color: white;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 /* Discord风格消息样式 */
 .message-wrapper {
   display: flex;
-  margin-bottom: 2px;
-  padding: 2px 16px;
+  margin-bottom: 8px; /* 增加下边距 */
+  padding: 8px 16px; /* 增加上下内边距 */
   transition: background-color 0.1s;
 }
 
@@ -116,10 +197,10 @@ export default {
   background-color: #32353b;
 }
 
-/* 同一个发送者的连续消息，减少间距 */
+/* 同一个发送者的连续消息，减少间距但增加上下留白 */
 .message-wrapper + .message-wrapper.ai-message,
 .message-wrapper + .message-wrapper.user-message {
-  margin-top: -20px;
+  margin-top: -4px; /* 减小上边距但保持一定间隔 */
 }
 
 .message-wrapper + .message-wrapper.ai-message .message-author,
@@ -171,8 +252,9 @@ export default {
 .message-text {
   font-size: 15px;
   color: #dcddde;
-  line-height: 1.5;
+  line-height: 1.6; /* 增加行高 */
   word-wrap: break-word;
+  margin-bottom: 6px; /* 段落间距 */
 }
 
 /* 引用和动作样式 */
@@ -244,7 +326,7 @@ export default {
 
 @media (max-width: 768px) {
   .message-wrapper {
-    padding: 2px 10px;
+    padding: 6px 10px; /* 移动端保留一些内边距 */
   }
 
   .message-avatar {

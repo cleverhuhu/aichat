@@ -559,10 +559,11 @@
             <div class="status-indicator" :class="{ 'online': ttsAvailable, 'offline': !ttsAvailable }">
               <i :class="ttsAvailable ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
               {{ ttsAvailable ? 'TTS服务已连接' : 'TTS服务未连接' }}
+              <div v-if="isTtsChecking" class="loading-spinner"></div>
             </div>
-            <button @click="checkTTSConnection" class="check-connection-button">
-              <i class="fas fa-sync-alt"></i>
-              检查连接
+            <button @click="checkTTSConnection" class="check-connection-button" :disabled="isTtsChecking">
+              <i :class="isTtsChecking ? 'fas fa-circle-notch fa-spin' : 'fas fa-sync-alt'"></i>
+              {{ isTtsChecking ? '检查中...' : '检查连接' }}
             </button>
           </div>
 
@@ -573,6 +574,10 @@
               <button @click="saveTTSUrl" class="save-url-button">
                 <i class="fas fa-save"></i> 保存
               </button>
+            </div>
+            <div class="url-help-text">
+              <i class="fas fa-info-circle"></i>
+              默认使用GPT-SoVITS TTS，确保服务已开启。如需更换其他TTS服务，请修改URL。
             </div>
           </div>
 
@@ -668,6 +673,32 @@
         </div>
       </div>
     </div>
+    <div class="preset-import-section">
+      <div class="preset-import-title">
+        <i class="fas fa-file-import"></i> 导入/导出预设
+      </div>
+      <div class="import-file-container">
+        <input type="file" ref="presetImportFile" @change="handlePresetFileImport" accept=".json" class="import-file-input">
+        <button @click="$refs.presetImportFile.click()" class="import-file-button">
+          <i class="fas fa-file-upload"></i> 导入预设文件
+        </button>
+        <button v-if="selectedPreset" @click="exportPreset" class="import-file-button">
+          <i class="fas fa-file-download"></i> 导出当前预设
+        </button>
+      </div>
+      <div class="import-file-info">
+        支持导入SillyTavern预设文件(.json)，导入后可能需要调整部分设置以兼容本应用。
+      </div>
+    </div>
+
+    <!-- TTS测试结果通知 -->
+    <div class="tts-test-modal" v-if="ttsTestResult !== null">
+      <div class="tts-test-content" :class="{'tts-test-success': ttsTestResult, 'tts-test-error': !ttsTestResult}">
+        <i :class="ttsTestResult ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
+        <div class="tts-test-message">{{ ttsTestResult ? 'TTS服务已成功连接!' : 'TTS服务连接失败，请检查服务是否启动' }}</div>
+        <button @click="ttsTestResult = null" class="tts-test-close">关闭</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -695,6 +726,10 @@ export default {
 
   data() {
     return {
+      showJsonEditor: false,
+      jsonEditorContent: '',
+      importError: null,
+      sillyTavernMode: true,
       activeTab: 'general',
       tabs: [
         { id: 'general', name: '基本设置', icon: 'fas fa-cog' },
@@ -741,6 +776,8 @@ export default {
       characterDescription: '', // 当前选中角色的描述
       ttsAvailable: false,
       ttsUrl: 'http://localhost:7865',
+      isTtsChecking: false, // 新增：TTS检查状态
+      ttsTestResult: null, // 新增：TTS测试结果
 
       // AI预设相关
       presets: [],
@@ -752,7 +789,10 @@ export default {
       showAddCharacterModal: false,
       newCharacterName: '',
       newCharacterDescription: '',
-      newCharacterAvatar: null
+      newCharacterAvatar: null,
+
+      // 导入功能
+      importedPresetFile: null
     };
   },
 
@@ -804,6 +844,16 @@ export default {
   },
 
   methods: {
+    toggleJsonEditor() {
+      if (!this.selectedPreset) return;
+      this.showJsonEditor = !this.showJsonEditor;
+      if (this.showJsonEditor) {
+        this.jsonEditorContent = JSON.stringify(this.selectedPreset, null, 2);
+      }
+    },
+
+
+
     mergeSettings(target, source) {
       // 创建一个深拷贝
       const result = JSON.parse(JSON.stringify(target));
@@ -882,6 +932,57 @@ export default {
           console.error('Error fetching presets:', error);
           this.addDefaultPresets();
         });
+    },
+
+    // 修改TTS检查连接函数
+    checkTTSConnection() {
+      this.isTtsChecking = true; // 设置检查状态为true
+      this.ttsAvailable = false; // 重置TTS状态
+
+      // 使用保存的URL或默认URL
+      const url = this.ttsUrl || 'http://localhost:7865';
+
+      console.log(`正在检查TTS服务: ${url}`);
+
+      fetch(`${url}/sdapi/v1/server-info`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000 // 设置超时时间
+      })
+        .then(response => {
+          this.isTtsChecking = false;
+
+          if (response.ok) {
+            console.log("TTS服务连接成功");
+            this.ttsAvailable = true;
+            this.ttsTestResult = true;
+            // 3秒后自动关闭成功提示
+            setTimeout(() => {
+              if (this.ttsTestResult === true) this.ttsTestResult = null;
+            }, 3000);
+          } else {
+            console.warn(`TTS服务返回错误状态码: ${response.status}`);
+            this.ttsAvailable = false;
+            this.ttsTestResult = false;
+          }
+        })
+        .catch(error => {
+          console.error(`TTS连接错误:`, error);
+          this.isTtsChecking = false;
+          this.ttsAvailable = false;
+          this.ttsTestResult = false;
+        });
+    },
+
+    saveTTSUrl() {
+      // 保存TTS URL到设置并检查连接
+      if (this.ttsUrl) {
+        console.log(`保存TTS URL: ${this.ttsUrl}`);
+        this.settings.ttsUrl = this.ttsUrl;
+        this.checkTTSConnection();
+      }
     },
 
     addDefaultPresets() {
@@ -968,30 +1069,6 @@ export default {
       ];
 
       this.presets = defaultPresets;
-    },
-
-    checkTTSConnection() {
-      this.ttsAvailable = false;
-
-      // 使用保存的URL或默认URL
-      const url = this.ttsUrl || 'http://localhost:7865';
-
-      fetch(`${url}/sdapi/v1/server-info`)
-        .then(response => {
-          this.ttsAvailable = response.ok;
-        })
-        .catch(error => {
-          console.warn('TTS连接错误:', error);
-          this.ttsAvailable = false;
-        });
-    },
-
-    saveTTSUrl() {
-      // 保存TTS URL到设置
-      if (this.ttsUrl) {
-        this.settings.ttsUrl = this.ttsUrl;
-        this.checkTTSConnection();
-      }
     },
 
     closeSettings() {
@@ -1367,7 +1444,117 @@ export default {
 
     saveSettings() {
       this.$emit('update-settings', JSON.parse(JSON.stringify(this.settings)));
-    }
+    },
+    handlePresetFileImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const presetData = JSON.parse(e.target.result);
+          const convertedPreset = this.convertSillyTavernPreset(presetData);
+          this.presets.push(convertedPreset);
+          this.selectPreset(convertedPreset);
+          alert('预设导入成功');
+        } catch (error) {
+          console.error('Preset import error:', error);
+          alert('预设导入失败: ' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    },
+    exportPreset() {
+  if (!this.selectedPreset) return;
+
+  // 创建一个深拷贝以防止修改原始数据
+  const presetToExport = JSON.parse(JSON.stringify(this.selectedPreset));
+
+  // 创建Blob并下载
+  const blob = new Blob([JSON.stringify(presetToExport, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${presetToExport.name || 'preset'}.json`;
+  document.body.appendChild(a);
+  a.click();
+
+  // 清理
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 0);
+},
+    convertSillyTavernPreset(stPreset) {
+  // 初始化转换后的预设
+  const convertedPreset = {
+    name: stPreset.name || '导入的预设',
+    tags: stPreset.tags || ['导入', 'SillyTavern'],
+    temperature: stPreset.temperature || 0.7,
+    top_p: stPreset.top_p || 0.95,
+    top_k: stPreset.top_k || 40,
+    presence_penalty: stPreset.presence_penalty || 0,
+    frequency_penalty: stPreset.frequency_penalty || 0,
+    instructions: [],
+    prompt_order: []
+  };
+
+  // 转换SillyTavern预设中的系统提示词到instructions
+  if (stPreset.system_prompt) {
+    convertedPreset.instructions.push({
+      title: '系统提示词',
+      content: stPreset.system_prompt,
+      role: 'system',
+      injection_position: 0,
+      injection_depth: 4,
+      system_prompt: true,
+      marker: false,
+      enabled: true,
+      expanded: false
+    });
+  }
+
+  // 转换SillyTavern上下文模板
+  if (stPreset.context) {
+    convertedPreset.instructions.push({
+      title: '上下文模板',
+      content: stPreset.context,
+      role: 'system',
+      injection_position: 0,
+      injection_depth: 4,
+      system_prompt: true,
+      marker: false,
+      enabled: true,
+      expanded: false
+    });
+  }
+
+  // 转换SillyTavern的jailbreak/NSFW提示词
+  if (stPreset.jailbreak) {
+    convertedPreset.instructions.push({
+      title: '越狱提示词',
+      content: stPreset.jailbreak,
+      role: 'system',
+      injection_position: 2, // 放到最后
+      injection_depth: 4,
+      system_prompt: true,
+      marker: false,
+      enabled: true,
+      expanded: false
+    });
+  }
+
+  // 添加基本的提示词顺序
+  convertedPreset.prompt_order = [
+    { identifier: 'main', enabled: true },
+    { identifier: 'charDescription', enabled: true },
+    { identifier: 'chatHistory', enabled: true }
+  ];
+
+  return convertedPreset;
+}
+
+
   }
 };
 </script>
@@ -1375,6 +1562,312 @@ export default {
 <style scoped>
 /* 引入Font Awesome (通过CDN) */
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css');
+
+/* SillyTavern风格预设界面 */
+.st-preset-container {
+  margin-top: 20px;
+  border: 1px solid #4f545c;
+  border-radius: 4px;
+  padding: 16px;
+  background-color: #2f3136;
+}
+
+.st-preset-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.st-preset-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-preset-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.st-preset-button {
+  padding: 6px 12px;
+  background-color: #4f545c;
+  border: none;
+  border-radius: 4px;
+  color: #dcddde;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.st-preset-button:hover {
+  background-color: #5d6269;
+}
+
+.st-preset-button.primary {
+  background-color: #5865f2;
+  color: white;
+}
+
+.st-preset-button.primary:hover {
+  background-color: #4752c4;
+}
+
+.st-preset-button.danger {
+  color: #f04747;
+}
+
+.st-preset-button.danger:hover {
+  background-color: #f04747;
+  color: white;
+}
+
+.st-preset-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.st-preset-section {
+  background-color: #36393f;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.st-preset-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.st-preset-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-token-counter {
+  background-color: #4f545c;
+  color: #dcddde;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.st-token-counter.warning {
+  background-color: #f0a747;
+  color: #ffffff;
+}
+
+.st-token-counter.danger {
+  background-color: #f04747;
+  color: #ffffff;
+}
+
+.st-dropzone {
+  border: 2px dashed #4f545c;
+  border-radius: 6px;
+  padding: 20px;
+  text-align: center;
+  color: #b9bbbe;
+  background-color: #36393f;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.st-dropzone:hover {
+  border-color: #5865f2;
+  background-color: #40444b;
+}
+
+.st-dropzone-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.st-dropzone-text {
+  font-size: 14px;
+}
+
+/* 导入预设文件区域 */
+.preset-import-section {
+  margin-top: 20px;
+  background-color: #2f3136;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.preset-import-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-file-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.import-file-button {
+  padding: 8px 12px;
+  background-color: #4f545c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.import-file-button:hover {
+  background-color: #5d6269;
+}
+
+.import-file-info {
+  font-size: 12px;
+  color: #b9bbbe;
+}
+
+/* 预设JSON编辑器 */
+.preset-json-editor {
+  margin-top: 20px;
+}
+
+.preset-json-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.preset-json-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preset-json-toggle {
+  background: none;
+  border: none;
+  color: #b9bbbe;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.preset-json-toggle:hover {
+  background-color: #4f545c;
+  color: white;
+}
+
+.preset-json-editor-container {
+  position: relative;
+  height: 400px;
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: #2f3136;
+  animation: slideDown 0.3s ease-out;
+}
+
+.preset-json-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.preset-json-action {
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  background-color: rgba(32, 34, 37, 0.7);
+  border: none;
+  color: #dcddde;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.preset-json-action:hover {
+  background-color: #4f545c;
+  color: white;
+}
+
+.preset-json-action.apply {
+  background-color: rgba(59, 165, 92, 0.7);
+}
+
+.preset-json-action.apply:hover {
+  background-color: #3ba55c;
+}
+
+.preset-json-action.restore {
+  background-color: rgba(88, 101, 242, 0.7);
+}
+
+.preset-json-action.restore:hover {
+  background-color: #5865f2;
+}
+
+/* 导入错误提示 */
+.import-error {
+  background-color: rgba(240, 71, 71, 0.1);
+  border: 1px solid #f04747;
+  border-radius: 4px;
+  padding: 12px;
+  margin-top: 12px;
+  color: #f04747;
+  font-size: 14px;
+}
+
+.import-error-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.import-error-message {
+  font-family: monospace;
+  white-space: pre-wrap;
+  font-size: 12px;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 8px;
+  border-radius: 4px;
+}
 
 /* Discord风格样式 */
 .settings-overlay {
@@ -2320,8 +2813,13 @@ input:checked + .slider:before {
   transition: all 0.2s;
 }
 
-.check-connection-button:hover {
+.check-connection-button:hover:not(:disabled) {
   background-color: #5d6269;
+}
+
+.check-connection-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .url-input-group {
@@ -2576,6 +3074,149 @@ input:checked + .slider:before {
 
 .confirm-button:hover {
   background-color: #4752c4;
+
+}
+
+/* TTS测试结果通知 */
+.tts-test-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1010;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.tts-test-content {
+  background-color: #36393f;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  min-width: 300px;
+  animation: popIn 0.3s ease-out;
+}
+
+@keyframes popIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.tts-test-content i {
+  font-size: 48px;
+}
+
+.tts-test-success i {
+  color: #43b581;
+}
+
+.tts-test-error i {
+  color: #f04747;
+}
+
+.tts-test-message {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.tts-test-close {
+  padding: 8px 16px;
+  background-color: #5865f2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tts-test-close:hover {
+  background-color: #4752c4;
+}
+
+/* 帮助文本 */
+.url-help-text {
+  font-size: 12px;
+  color: #b9bbbe;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 加载动画 */
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-left: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 预设导入功能 */
+.preset-import-section {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: #2f3136;
+  border-radius: 4px;
+}
+
+.preset-import-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-file-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-file-input {
+  display: none;
+}
+
+.import-file-button {
+  padding: 8px 12px;
+  background-color: #4f545c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.import-file-button:hover {
+  background-color: #5d6269;
+}
+
+.import-file-info {
+  font-size: 12px;
+  color: #b9bbbe;
+  margin-top: 8px;
 }
 
 /* 响应式样式 */

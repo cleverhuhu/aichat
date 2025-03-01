@@ -109,9 +109,9 @@ def build_prompt(user_input, preset, character_content="", first_message=True, c
 
 
 # AI 回复生成 (支持多种 AI 服务)
+# AI 回复生成 (支持多种 AI 服务)
 def generate_ai_response(user_input, ai_provider, ai_settings, preset=None, character_file_content="",
-                         first_message=True,
-                         character_name=""):
+                         first_message=True, character_name="", image_data=None):
     # 加载预设（如果提供）
     if preset is None or (isinstance(preset, str) and preset):
         preset = load_preset(preset)
@@ -123,11 +123,11 @@ def generate_ai_response(user_input, ai_provider, ai_settings, preset=None, char
     # 根据所选 AI 提供商调用不同的 API
     try:
         if ai_provider == "gemini":
-            return generate_with_gemini(prompt, ai_settings, preset)
+            return generate_with_gemini(prompt, ai_settings, preset, image_data)
         elif ai_provider == "openai":
-            return generate_with_openai(prompt, ai_settings, preset)
+            return generate_with_openai(prompt, ai_settings, preset, image_data)
         elif ai_provider == "claude":
-            return generate_with_claude(prompt, ai_settings, preset)
+            return generate_with_claude(prompt, ai_settings, preset, image_data)
         else:
             print(f"未知的 AI 提供商: {ai_provider}")
             return "AI 回复生成失败，未知的 AI 提供商。"
@@ -137,7 +137,8 @@ def generate_ai_response(user_input, ai_provider, ai_settings, preset=None, char
 
 
 # 使用 Google Gemini 生成回复
-def generate_with_gemini(prompt, ai_settings, preset=None):
+# 使用 Google Gemini 生成回复（添加图片支持）
+def generate_with_gemini(prompt, ai_settings, preset=None, image_data=None):
     api_key = ai_settings.get("apiKey", "")
     model_name = ai_settings.get("model", "gemini-2.0-flash-lite-preview-02-05")
     temperature = float(ai_settings.get("temperature", 0.7))
@@ -148,6 +149,11 @@ def generate_with_gemini(prompt, ai_settings, preset=None):
     genai.configure(api_key=api_key)
 
     try:
+        # 检查是否支持图片输入的模型
+        vision_models = ["gemini-pro-vision", "gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-pro",
+                         "gemini-2.0-pro-exp-02-05"]
+        is_vision_model = any(vm in model_name for vm in vision_models)
+
         model = genai.GenerativeModel(model_name)
 
         # 使用预设温度（如果有）
@@ -161,15 +167,43 @@ def generate_with_gemini(prompt, ai_settings, preset=None):
             "max_output_tokens": 2000
         }
 
-        response = model.generate_content(prompt, generation_config=generation_config)
+        # 如果有图片且模型支持图片
+        if image_data and is_vision_model:
+            import base64
+            from google.generativeai.types import Part
+
+            # 将Base64图片数据转换为二进制
+            if isinstance(image_data, str) and image_data.startswith("data:"):
+                # 处理Data URL格式
+                image_format = image_data.split(';')[0].split('/')[1]
+                base64_data = image_data.split(',')[1]
+                image_binary = base64.b64decode(base64_data)
+            elif isinstance(image_data, str):
+                # 直接是Base64字符串
+                image_binary = base64.b64decode(image_data)
+            else:
+                # 已经是二进制数据
+                image_binary = image_data
+
+            # 创建多模态请求
+            response = model.generate_content(
+                [
+                    Part.from_text(prompt),
+                    Part.from_data(image_binary, mime_type="image/jpeg")
+                ],
+                generation_config=generation_config
+            )
+        else:
+            response = model.generate_content(prompt, generation_config=generation_config)
+
         return response.text
     except Exception as e:
         print(f"Gemini API error: {e}")
         return f"Gemini API 错误: {str(e)}"
 
 
-# 使用 OpenAI GPT 生成回复
-def generate_with_openai(prompt, ai_settings, preset=None):
+# 使用 OpenAI GPT 生成回复（添加图片支持）
+def generate_with_openai(prompt, ai_settings, preset=None, image_data=None):
     api_key = ai_settings.get("apiKey", "")
     model_name = ai_settings.get("model", "gpt-3.5-turbo")
     temperature = float(ai_settings.get("temperature", 0.7))
@@ -184,9 +218,39 @@ def generate_with_openai(prompt, ai_settings, preset=None):
         if preset and "temperature" in preset:
             temperature = float(preset.get("temperature", temperature))
 
+        # 检查是否为支持图片的模型
+        vision_models = ["gpt-4-vision", "gpt-4o", "gpt-4-turbo"]
+        is_vision_model = any(vm in model_name for vm in vision_models)
+
+        if image_data and is_vision_model:
+            # 处理图片输入
+            import base64
+
+            # 准备图片内容
+            if isinstance(image_data, str) and image_data.startswith("data:"):
+                # 已经是Data URL格式
+                image_url = image_data
+            elif isinstance(image_data, str):
+                # 转换Base64为Data URL
+                image_url = f"data:image/jpeg;base64,{image_data}"
+            else:
+                # 转换二进制为Base64 Data URL
+                base64_data = base64.b64encode(image_data).decode('utf-8')
+                image_url = f"data:image/jpeg;base64,{base64_data}"
+
+            # 创建多模态请求
+            messages = [
+                {"role": "user", "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]}
+            ]
+        else:
+            messages = [{"role": "user", "content": prompt}]
+
         response = client.chat.completions.create(
             model=model_name,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             temperature=temperature,
             max_tokens=2000,
             top_p=float(preset.get("top_p", 0.95)) if preset else 0.95,
@@ -199,8 +263,8 @@ def generate_with_openai(prompt, ai_settings, preset=None):
         return f"OpenAI API 错误: {str(e)}"
 
 
-# 使用 Anthropic Claude 生成回复
-def generate_with_claude(prompt, ai_settings, preset=None):
+# 使用 Anthropic Claude 生成回复（添加图片支持）
+def generate_with_claude(prompt, ai_settings, preset=None, image_data=None):
     api_key = ai_settings.get("apiKey", "")
     model_name = ai_settings.get("model", "claude-3-sonnet-20240229")
     temperature = float(ai_settings.get("temperature", 0.7))
@@ -215,14 +279,50 @@ def generate_with_claude(prompt, ai_settings, preset=None):
         if preset and "temperature" in preset:
             temperature = float(preset.get("temperature", temperature))
 
-        message = client.messages.create(
-            model=model_name,
-            max_tokens=2000,
-            temperature=temperature,
-            top_p=float(preset.get("top_p", 0.95)) if preset else 0.95,
-            system="You are a helpful AI assistant that specializes in role-playing and character simulation.",
-            messages=[{"role": "user", "content": prompt}]
-        )
+        # Claude 3模型支持图片输入
+        claude_vision_models = ["claude-3", "claude-3-5", "claude-3-7"]
+        is_vision_model = any(vm in model_name for vm in claude_vision_models)
+
+        if image_data and is_vision_model:
+            # 处理图片输入
+            import base64
+            from anthropic.types import ImageBlockParam, MediaBlockParam
+
+            # 准备图片内容
+            if isinstance(image_data, str) and image_data.startswith("data:"):
+                # 已经是Data URL格式，提取Base64部分
+                base64_data = image_data.split(',')[1]
+            elif isinstance(image_data, str):
+                # 已经是Base64字符串
+                base64_data = image_data
+            else:
+                # 转换二进制为Base64
+                base64_data = base64.b64encode(image_data).decode('utf-8')
+
+            # 创建多模态请求
+            message = client.messages.create(
+                model=model_name,
+                max_tokens=2000,
+                temperature=temperature,
+                top_p=float(preset.get("top_p", 0.95)) if preset else 0.95,
+                system="You are a helpful AI assistant that specializes in role-playing and character simulation.",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64_data}}
+                    ]
+                }]
+            )
+        else:
+            message = client.messages.create(
+                model=model_name,
+                max_tokens=2000,
+                temperature=temperature,
+                top_p=float(preset.get("top_p", 0.95)) if preset else 0.95,
+                system="You are a helpful AI assistant that specializes in role-playing and character simulation.",
+                messages=[{"role": "user", "content": prompt}]
+            )
         return message.content[0].text
     except Exception as e:
         print(f"Claude API error: {e}")
