@@ -5,7 +5,7 @@
   "selectedCharacter": "妹妹.txt",
   "currentAIProvider": "gemini",
   "gemini": {
-    "apiKey": "AIzaSyAHYZIAixqoFfNyJnvsNxDg1BXKfjQCQPA",
+    "apiKey": "",
     "model": "gemini-2.0-flash-lite-preview-02-05",
     "temperature": 0.7
   },
