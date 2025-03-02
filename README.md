@@ -233,14 +233,6 @@ npm run serve
 - [OpenAI API](https://platform.openai.com/) - OpenAI平台注册获取
 - [Anthropic Claude API](https://console.anthropic.com/) - Anthropic控制台注册获取
 
-### 模型选择指南
-
-| 使用场景 | 推荐模型 | 特点 |
-|---------|---------|------|
-| 日常对话 | Gemini Flash / GPT-3.5 | 响应速度快，成本低 |
-| 复杂问答 | GPT-4 / Claude 3 Opus | 推理能力强，回答更全面 |
-| 创意写作 | Claude 3 Sonnet / GPT-4 | 创意性强，叙事能力好 |
-| 图像识别 | Gemini Pro Vision / GPT-4 Vision | 支持图像理解和分析 |
 
 ### TTS服务配置
 默认TTS服务地址为`http://localhost:7865`，可在设置界面修改连接地址和参数。
